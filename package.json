@@ -1,0 +1,44 @@
+{
+  "name": "wincc-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP Server for WinCC REST API integration",
+  "type": "module",
+  "main": "index.js",
+  "bin": {
+    "wincc-mcp-server": "index.js"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --inspect index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "mcp",
+    "wincc",
+    "scada",
+    "siemens",
+    "automation",
+    "industrial"
+  ],
+  "author": "Andreas Vogler",
+  "license": "GPL-3.0 license",
+  "dependencies": {
+"@modelcontextprotocol/sdk": "^1.12.1",
+    "express": "^5.1.0",
+    "mcp-remote": "^0.1.13",
+    "zod": "^3.25.51",
+    "node-fetch": "^3.3.0",
+    "cors": "^2.8.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vogler75/winccv8-mcp-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/vogler75/winccv8-mcp-server/issues"
+  },
+  "homepage": "https://github.com/vogler75/winccv8-mcp-server#readme"
+}
