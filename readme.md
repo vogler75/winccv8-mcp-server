@@ -109,6 +109,23 @@ npm run dev
 
 The server will start on port 3000 by default and listen for MCP requests at the `/mcp` endpoint.
 
+## Connecting with a Claude Desktop Client
+
+To use this MCP server with the Claude AI desktop application (or other clients supporting `mcp-remote`), you need to configure the client to connect to this server. For the Claude Desktop application, this is typically done by editing a `claude_desktop_config.json` file. The location of this file varies by operating system but is usually within the Claude application's support or configuration directory.
+
+Add or update the `mcpServers` section in your `claude_desktop_config.json` file like this:
+
+```json
+{
+  "mcpServers": {
+    "WinCC V8": {
+      "command": "npx",
+      "args": ["mcp-remote", "http://localhost:3000/mcp"]
+    }
+  }
+}
+```
+
 ## Technical Details
 
 ### Security Considerations
