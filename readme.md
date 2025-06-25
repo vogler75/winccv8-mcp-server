@@ -132,10 +132,6 @@ Run with debugging enabled:
 npm run dev
 ```
 
-## License
-
-MIT License - see package.json for details.
-
 ## Author
 
 Created by Andreas Vogler, 2025
