@@ -76,6 +76,10 @@ cd wincc-mcp-server
 npm install
 ```
 
+## Disclaimer
+
+**Security Notice:** This server has not been hardened or secured for production use. It is the responsibility of the user to implement appropriate security measures (such as authentication, authorization, network restrictions, and HTTPS) before deploying or exposing this server in any environment.
+
 ## Configuration
 
 ### Environment Variables
