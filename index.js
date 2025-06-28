@@ -12,14 +12,16 @@ import express from 'express';
 import https from 'https';
 
 // Define the URL of your WinCC REST server
-const WINCC_URL = process.env.WINCC_URL || "http://localhost:34569/WinCCRestService";
+const os = await import('os');
+const hostname = os.hostname();
+const WINCC_URL = process.env.WINCC_URL || `https://${hostname}:34569/WinCCRestService`;
 const WINCC_USR = process.env.WINCC_USR || "username1";
 const WINCC_PWD = process.env.WINCC_PWD || "password1";
 const WINCC_BEARER_TOKEN = process.env.WINCC_BEARER_TOKEN || null;
 
 // Create an HTTPS agent that ignores self-signed certificate errors
 // WARNING: Use with caution, only for development or trusted internal networks.
-const agentToUse = WINCC_URL.startsWith('https://')
+const agentToUse = WINCC_URL.startsWith('https://') && process.env.WINCC_SKIP_CERTIFICATE_VALIDATION === 'true'
   ? new https.Agent({ rejectUnauthorized: false })
   : undefined;
 
@@ -71,6 +73,40 @@ async function makeWinCCRequest(endpoint, method = 'GET', body = null) {
     return data;
   } catch (error) {
     console.error(`WinCC API request failed: ${error.message} ${method} ${url} ${body ? JSON.stringify(body) : ''}`);
+
+	  // Enhanced error logging with more details
+    console.error('=== WinCC API Request Failed ===');
+    console.error('URL:', url);
+    console.error('Method:', method);
+    console.error('Headers:', JSON.stringify(headers, null, 2));
+    console.error('Body:', body ? JSON.stringify(body, null, 2) : 'No body');
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error cause:', error.cause);
+    console.error('Error stack:', error.stack);
+    
+    // Check for specific error types
+    if (error.code) {
+      console.error('Error code:', error.code);
+    }        
+    
+    // Certificate/SSL errors
+    if (error.code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' || 
+        error.code === 'CERT_HAS_EXPIRED' ||
+        error.code === 'DEPTH_ZERO_SELF_SIGNED_CERT') {
+      console.error('SSL Certificate issue detected');
+    }
+    
+    // Connection errors
+    if (error.code === 'ECONNREFUSED' || error.code === 'ECONNRESET') {
+      console.error('Connection issue detected');
+    }
+    
+    // Timeout errors
+    if (error.code === 'ETIMEDOUT' || error.name === 'AbortError') {
+      console.error('Timeout issue detected');
+    }
+    
     throw error;
   }
 }

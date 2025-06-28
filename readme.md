@@ -89,6 +89,8 @@ WINCC_URL=http://localhost:34569/WinCCRestService  # Default WinCC REST service 
 WINCC_USR=username1                                # Default username
 WINCC_PWD=password1                                # Default password
 WINCC_BEARER_TOKEN=                                # Optional bearer token
+WINCC_SKIP_CERTIFICATE_VALIDATION=false            # Set to true to skip SSL certificate validation (development only)
+NODE_TLS_REJECT_UNAUTHORIZED=0                     # Set to 0 to disable TLS certificate validation (development only)
 ```
 
 ### WinCC System Setup
