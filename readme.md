@@ -85,12 +85,15 @@ npm install
 ### Environment Variables
 ```bash
 # WinCC REST API Configuration
-WINCC_URL=http://localhost:34569/WinCCRestService  # Default WinCC REST service URL
+WINCC_URL=https://localhost:34569/WinCCRestService  # Default WinCC REST service URL
 WINCC_USR=username1                                # Default username
 WINCC_PWD=password1                                # Default password
 WINCC_BEARER_TOKEN=                                # Optional bearer token
 WINCC_SKIP_CERTIFICATE_VALIDATION=false            # Set to true to skip SSL certificate validation (development only)
 NODE_TLS_REJECT_UNAUTHORIZED=0                     # Set to 0 to disable TLS certificate validation (development only)
+
+# CORS Configuration
+WINCC_ALLOW_ORIGIN=*                               # CORS origin setting - '*' allows all origins, or specify specific URLs like 'http://localhost:3000'
 ```
 
 ### WinCC System Setup
@@ -139,6 +142,15 @@ Add or update the `mcpServers` section in your `claude_desktop_config.json` file
 - **Certificate Validation**: The server can bypass SSL certificate validation (development only)
 - **Authentication**: Always use proper authentication credentials
 - **Network Security**: Ensure proper firewall and network security configurations
+- **CORS Configuration**: Use `WINCC_ALLOW_ORIGIN` to restrict allowed origins in production
+
+### CORS (Cross-Origin Resource Sharing)
+The server includes CORS support to allow web applications to access the MCP endpoints from different origins:
+
+- **Development**: Use `WINCC_ALLOW_ORIGIN=*` to allow all origins
+- **Production**: Specify exact origins like `WINCC_ALLOW_ORIGIN=https://yourdomain.com,https://anotherdomain.com`
+- **Multiple Origins**: Separate multiple origins with commas
+- **Security**: Never use `*` in production environments with sensitive data
 
 ## Troubleshooting
 

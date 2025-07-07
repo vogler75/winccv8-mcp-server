@@ -18,6 +18,7 @@ const WINCC_URL = process.env.WINCC_URL || `https://${hostname}:34569/WinCCRestS
 const WINCC_USR = process.env.WINCC_USR || "username1";
 const WINCC_PWD = process.env.WINCC_PWD || "password1";
 const WINCC_BEARER_TOKEN = process.env.WINCC_BEARER_TOKEN || null;
+const WINCC_ALLOW_ORIGIN = process.env.WINCC_ALLOW_ORIGIN || null; 
 
 // Create an HTTPS agent that ignores self-signed certificate errors
 // WARNING: Use with caution, only for development or trusted internal networks.
@@ -644,10 +645,27 @@ server.tool(
 // ------------------------------------------------------------------------------------------------------------------------------------------------
 
 const app = express();
+
+// CORS middleware to allow cross-origin requests
+app.use((req, res, next) => {
+  if (WINCC_ALLOW_ORIGIN) {
+    res.header('Access-Control-Allow-Origin', WINCC_ALLOW_ORIGIN);
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
+    res.header('Access-Control-Allow-Headers', 'Origin, Content-Type, Accept, Authorization');
+  }
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+  } else {
+    next();
+  }
+});
+
 app.use(express.json());
 
 app.post('/mcp', async (req, res) => {
-  console.log('Received POST MCP request');
+  console.log('Received POST MCP request: ' + req.url + ' ' + JSON.stringify(req.body, null, 2));
   try {
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
