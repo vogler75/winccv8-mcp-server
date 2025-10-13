@@ -25,6 +25,12 @@ A Model Context Protocol (MCP) server that provides access to Siemens WinCC V8 S
 - **Timers**: Manage archive system timers and their configurations
 - **Archive Tags**: Access archive system tag configurations
 
+### 🚨 **Alarm Logging**
+- **Message Classes/Types/Groups/Blocks**: Discover message classes, types, groups, and blocks
+- **Messages**: List all messages and read specific message details
+- **Limit Values**: Read configured limit values and per-tag limits
+- **Runtime Lists**: Query message lists, short/long-term archives, hit/lock/hide/hidden lists via REST filters
+
 ### 🌐 **HTTP Transport**
 - Express.js server with HTTP endpoints
 - Streamable HTTP server transport for MCP communication
@@ -62,6 +68,29 @@ A Model Context Protocol (MCP) server that provides access to Siemens WinCC V8 S
 - `wincc-get-timer` - Read specific timer configuration
 - `wincc-get-archive-tag` - Read archive system tag configuration
 - `wincc-get-archive-tags` - Read all archive system tag configurations
+
+### Alarm Logging
+- `wincc-get-alarm-message-classes` - List message classes (GET /alarmLogging/MessageClasses)
+- `wincc-get-alarm-message-class` - Read specific message class (GET /alarmLogging/MessageClass/{messageClassName})
+- `wincc-get-alarm-message-types` - List message types (GET /alarmLogging/MessageTypes)
+- `wincc-get-alarm-message-type` - Read specific message type (GET /alarmLogging/MessageType/{messageTypeName})
+- `wincc-get-alarm-message-groups` - List message groups (GET /alarmLogging/MessageGroups)
+- `wincc-get-alarm-message-group` - Read specific message group (GET /alarmLogging/MessageGroup/{messageGroupName})
+- `wincc-get-alarm-message-blocks` - List message blocks (GET /alarmLogging/MessageBlocks)
+- `wincc-get-alarm-message-block` - Read specific message block (GET /alarmLogging/MessageBlock/{messageBlockName})
+- `wincc-get-alarm-messages` - List messages (GET /alarmLogging/Messages)
+- `wincc-get-alarm-message` - Read specific message by number (GET /alarmLogging/Message/{messageNumber})
+- `wincc-get-alarm-limit-values` - List limit values (GET /alarmLogging/LimitValues)
+- `wincc-get-alarm-limit-value` - Read per-tag limit values (GET /alarmLogging/LimitValue/{tagName})
+- `wincc-get-alarm-rest-filters` - List REST filters (GET /alarmLogging/RestFilters)
+- `wincc-get-alarm-rest-filter` - Read REST filter (GET /alarmLogging/RestFilter/{filterName})
+- `wincc-get-alarm-message-list` - Read runtime messages of a message list (GET /alarmLogging/MessageList/{filterName})
+- `wincc-get-alarm-short-term-archive` - Read runtime messages from a short-term archive (GET /alarmLogging/ShortTermArchive/{filterName}). Supports `maxValues` to limit returned messages (message system).
+- `wincc-get-alarm-long-term-archive` - Read runtime messages from a long-term archive (GET /alarmLogging/LongTermArchive/{filterName}). Supports `maxValues` to limit returned messages (message system).
+- `wincc-get-alarm-hit-list` - Read runtime messages from a hit list (GET /alarmLogging/HitList/{filterName}). Supports `maxValues` to limit returned messages (message system).
+- `wincc-get-alarm-lock-list` - Read runtime messages from a lock list (GET /alarmLogging/LockList/{filterName})
+- `wincc-get-alarm-hide-list` - Read runtime messages from a list to be hidden (GET /alarmLogging/Hidelist/{filterName})
+- `wincc-get-alarm-hidden-message-list` - Read runtime messages from a list of hidden messages (GET /alarmLogging/HiddenMessageList/{filterName})
 
 ## Installation
 
@@ -178,6 +207,19 @@ Add or update the `mcpServers` section in your `claude_desktop_config.json` file
   }
 }
 ```
+
+## Language Settings
+
+- Accept-Language: Preferred response language for localized texts (e.g., message text)
+- Content-Language: Language context for identifiers passed in URL or query
+- Default: If omitted, WinCC typically defaults to `en-US`
+
+## Runtime List Notes
+
+- Message list endpoints (`MessageList`, `ShortTermArchive`, `LongTermArchive`, `HitList`, `LockList`, `Hidelist`, `HiddenMessageList`) accept a `filterName` path segment referring to a configured REST filter.
+- Paging (`itemLimit`, `continuationPoint`) applies to configuration list endpoints, not message system runtime lists.
+- For `ShortTermArchive`, `LongTermArchive`, and `HitList`, you can use `maxValues` to cap the number of returned messages (up to 1000 unless otherwise specified).
+- Combine with `Accept-Language` and `Content-Language` as needed.
 
 ## Technical Details
 

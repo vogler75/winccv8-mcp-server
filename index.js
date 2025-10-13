@@ -67,6 +67,7 @@ Options:
   --wincc-allow-origin <origin>           CORS allowed origin, e.g. '*' or 'http://host:port'
   --wincc-skip-certificate-validation     If set (or =true), ignore self-signed certs for https
   --node-tls-reject-unauthorized <0|1>    Set NODE_TLS_REJECT_UNAUTHORIZED (0 disables TLS verification)
+  --debug                                 Enable debug logging
   -h, --help                              Show this help
 
 Environment variables (still supported):
@@ -78,6 +79,7 @@ Environment variables (still supported):
   WINCC_ALLOW_ORIGIN
   WINCC_SKIP_CERTIFICATE_VALIDATION
   NODE_TLS_REJECT_UNAUTHORIZED
+  DEBUG
 `;
   console.log(help);
 }
@@ -100,19 +102,18 @@ const WINCC_URL = (args['wincc-url']) || process.env.WINCC_URL || `https://${hos
 const WINCC_USR = (args['wincc-usr']) || process.env.WINCC_USR || "username1";
 const WINCC_PWD = (args['wincc-pwd']) || process.env.WINCC_PWD || "password1";
 const WINCC_BEARER_TOKEN = (args['wincc-bearer-token']) || process.env.WINCC_BEARER_TOKEN || null;
-const WINCC_ALLOW_ORIGIN = (args['wincc-allow-origin']) || process.env.WINCC_ALLOW_ORIGIN || null; 
+const WINCC_ALLOW_ORIGIN = (args['wincc-allow-origin']) || process.env.WINCC_ALLOW_ORIGIN || null;
 const WINCC_SKIP_CERT_VALIDATION = parseBoolean(
   args['wincc-skip-certificate-validation'] ?? process.env.WINCC_SKIP_CERTIFICATE_VALIDATION,
   false
 );
+const DEBUG = parseBoolean(args['debug'] ?? process.env.DEBUG, false);
 
 // Create an HTTPS agent that ignores self-signed certificate errors
 // WARNING: Use with caution, only for development or trusted internal networks.
 const agentToUse = WINCC_URL.startsWith('https://') && WINCC_SKIP_CERT_VALIDATION
   ? new https.Agent({ rejectUnauthorized: false })
   : undefined;
-
-console.log("WinCC URL:", WINCC_URL);
 
 const sessionData = {
   usr: WINCC_USR,
@@ -121,7 +122,7 @@ const sessionData = {
 };
 
 // Helper function to make HTTP requests to WinCC REST API
-async function makeWinCCRequest(endpoint, method = 'GET', body = null) {
+async function makeWinCCRequest(endpoint, method = 'GET', body = null, extraHeaders = undefined) {
   const url = `${WINCC_URL}${endpoint}`;
 
   // Prepare headers
@@ -136,6 +137,13 @@ async function makeWinCCRequest(endpoint, method = 'GET', body = null) {
   } else if (sessionData.usr && sessionData.pwd) {
     const credentials = Buffer.from(`${sessionData.usr}:${sessionData.pwd}`).toString('base64');
     headers['Authorization'] = `Basic ${credentials}`;
+  }
+
+  // Merge optional extra headers (e.g., language settings)
+  if (extraHeaders && typeof extraHeaders === 'object') {
+    for (const [k, v] of Object.entries(extraHeaders)) {
+      if (v !== undefined && v !== null && v !== '') headers[k] = v;
+    }
   }
 
   const options = {
@@ -234,7 +242,7 @@ server.tool(
 
 server.tool(
   "wincc-get-connections",
-  "Read configuration data of all connections in WinCC Tag Management",
+  "Reads configuration data of all connections in Tag Management. Base URL: /tagManagement. Endpoint: Connections. According to WinCC REST docs, returns connections created below communication drivers; supports paging via itemLimit and continuationPoint.",
   {
     itemLimit: z.number().optional().describe("Maximum number of items to return"),
     continuationPoint: z.number().optional().describe("Continuation point for paging")
@@ -717,6 +725,425 @@ server.tool(
 );
 
 // ------------------------------------------------------------------------------------------------------------------------------------------------
+// ALARM LOGGING TOOLS
+// ------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+server.tool(
+  "wincc-get-alarm-message-classes",
+  "Lists message classes. GET /alarmLogging/MessageClasses with optional paging (itemLimit, continuationPoint). Use Accept-Language for response language and Content-Language for name resolution.",
+  {
+    itemLimit: z.number().optional(),
+    continuationPoint: z.number().optional(),
+    acceptLanguage: z.string().optional().describe("Preferred response language, e.g., en-US, de-DE"),
+    contentLanguage: z.string().optional().describe("Language for identifiers in URL/query, e.g., en-US, de-DE")
+  },
+  async ({ itemLimit, continuationPoint, acceptLanguage, contentLanguage }, executionContext) => {
+    try {
+      let endpoint = "/alarmLogging/MessageClasses";
+      const params = new URLSearchParams();
+      if (itemLimit) params.append("itemLimit", itemLimit.toString());
+      if (continuationPoint) params.append("continuationPoint", continuationPoint.toString());
+      if (params.toString()) endpoint += `?${params.toString()}`;
+      const headers = {
+        ...(acceptLanguage ? { 'Accept-Language': acceptLanguage } : {}),
+        ...(contentLanguage ? { 'Content-Language': contentLanguage } : {})
+      };
+      const result = await makeWinCCRequest(endpoint, 'GET', null, headers);
+      return mcpResult(`WinCC Message Classes:\n${JSON.stringify(result, null, 2)}`);
+    } catch (error) {
+      return mcpResult(`Error retrieving message classes: ${error.message}`);
+    }
+  }
+);
+
+server.tool(
+  "wincc-get-alarm-message-class",
+  "Reads a message class. GET /alarmLogging/MessageClass/{messageClassName}. Use Accept-Language for response language and Content-Language for identifier resolution.",
+  {
+    messageClassName: z.string().min(1, "Message class name cannot be empty"),
+    acceptLanguage: z.string().optional().describe("Preferred response language, e.g., en-US, de-DE"),
+    contentLanguage: z.string().optional().describe("Language for identifiers in URL/query, e.g., en-US, de-DE")
+  },
+  async ({ messageClassName, acceptLanguage, contentLanguage }, executionContext) => {
+    try {
+      const endpoint = `/alarmLogging/MessageClass/${encodeURIComponent(messageClassName)}`;
+      const headers = {
+        ...(acceptLanguage ? { 'Accept-Language': acceptLanguage } : {}),
+        ...(contentLanguage ? { 'Content-Language': contentLanguage } : {})
+      };
+      const result = await makeWinCCRequest(endpoint, 'GET', null, headers);
+      return mcpResult(`WinCC Message Class '${messageClassName}':\n${JSON.stringify(result, null, 2)}`);
+    } catch (error) {
+      return mcpResult(`Error retrieving message class '${messageClassName}': ${error.message}`);
+    }
+  }
+);
+
+server.tool(
+  "wincc-get-alarm-message-types",
+  "Lists message types. GET /alarmLogging/MessageTypes with optional paging (itemLimit, continuationPoint). Use Accept-Language for response language and Content-Language for identifier resolution.",
+  {
+    itemLimit: z.number().optional(),
+    continuationPoint: z.number().optional(),
+    acceptLanguage: z.string().optional().describe("Preferred response language, e.g., en-US, de-DE"),
+    contentLanguage: z.string().optional().describe("Language for identifiers in URL/query, e.g., en-US, de-DE")
+  },
+  async ({ itemLimit, continuationPoint, acceptLanguage, contentLanguage }, executionContext) => {
+    try {
+      let endpoint = "/alarmLogging/MessageTypes";
+      const params = new URLSearchParams();
+      if (itemLimit) params.append("itemLimit", itemLimit.toString());
+      if (continuationPoint) params.append("continuationPoint", continuationPoint.toString());
+      if (params.toString()) endpoint += `?${params.toString()}`;
+      const headers = {
+        ...(acceptLanguage ? { 'Accept-Language': acceptLanguage } : {}),
+        ...(contentLanguage ? { 'Content-Language': contentLanguage } : {})
+      };
+      const result = await makeWinCCRequest(endpoint, 'GET', null, headers);
+      return mcpResult(`WinCC Message Types:\n${JSON.stringify(result, null, 2)}`);
+    } catch (error) {
+      return mcpResult(`Error retrieving message types: ${error.message}`);
+    }
+  }
+);
+
+server.tool(
+  "wincc-get-alarm-message-type",
+  "Reads a message type. GET /alarmLogging/MessageType/{messageTypeName}. Use Accept-Language for response language and Content-Language for identifier resolution.",
+  {
+    messageTypeName: z.string().min(1, "Message type name cannot be empty"),
+    acceptLanguage: z.string().optional().describe("Preferred response language, e.g., en-US, de-DE"),
+    contentLanguage: z.string().optional().describe("Language for identifiers in URL/query, e.g., en-US, de-DE")
+  },
+  async ({ messageTypeName, acceptLanguage, contentLanguage }, executionContext) => {
+    try {
+      const endpoint = `/alarmLogging/MessageType/${encodeURIComponent(messageTypeName)}`;
+      const headers = {
+        ...(acceptLanguage ? { 'Accept-Language': acceptLanguage } : {}),
+        ...(contentLanguage ? { 'Content-Language': contentLanguage } : {})
+      };
+      const result = await makeWinCCRequest(endpoint, 'GET', null, headers);
+      return mcpResult(`WinCC Message Type '${messageTypeName}':\n${JSON.stringify(result, null, 2)}`);
+    } catch (error) {
+      return mcpResult(`Error retrieving message type '${messageTypeName}': ${error.message}`);
+    }
+  }
+);
+
+server.tool(
+  "wincc-get-alarm-message-blocks",
+  "Lists message blocks. GET /alarmLogging/MessageBlocks with optional paging (itemLimit, continuationPoint). Use Accept-Language for response language and Content-Language for identifier resolution.",
+  {
+    itemLimit: z.number().optional(),
+    continuationPoint: z.number().optional(),
+    acceptLanguage: z.string().optional().describe("Preferred response language, e.g., en-US, de-DE"),
+    contentLanguage: z.string().optional().describe("Language for identifiers in URL/query, e.g., en-US, de-DE")
+  },
+  async ({ itemLimit, continuationPoint, acceptLanguage, contentLanguage }, executionContext) => {
+    try {
+      let endpoint = "/alarmLogging/MessageBlocks";
+      const params = new URLSearchParams();
+      if (itemLimit) params.append("itemLimit", itemLimit.toString());
+      if (continuationPoint) params.append("continuationPoint", continuationPoint.toString());
+      if (params.toString()) endpoint += `?${params.toString()}`;
+      const headers = {
+        ...(acceptLanguage ? { 'Accept-Language': acceptLanguage } : {}),
+        ...(contentLanguage ? { 'Content-Language': contentLanguage } : {})
+      };
+      const result = await makeWinCCRequest(endpoint, 'GET', null, headers);
+      return mcpResult(`WinCC Message Blocks:\n${JSON.stringify(result, null, 2)}`);
+    } catch (error) {
+      return mcpResult(`Error retrieving message blocks: ${error.message}`);
+    }
+  }
+);
+
+server.tool(
+  "wincc-get-alarm-message-block",
+  "Reads a message block. GET /alarmLogging/MessageBlock/{messageBlockName}. Use Accept-Language for response language and Content-Language for identifier resolution.",
+  {
+    messageBlockName: z.string().min(1, "Message block name cannot be empty"),
+    acceptLanguage: z.string().optional().describe("Preferred response language, e.g., en-US, de-DE"),
+    contentLanguage: z.string().optional().describe("Language for identifiers in URL/query, e.g., en-US, de-DE")
+  },
+  async ({ messageBlockName, acceptLanguage, contentLanguage }, executionContext) => {
+    try {
+      const endpoint = `/alarmLogging/MessageBlock/${encodeURIComponent(messageBlockName)}`;
+      const headers = {
+        ...(acceptLanguage ? { 'Accept-Language': acceptLanguage } : {}),
+        ...(contentLanguage ? { 'Content-Language': contentLanguage } : {})
+      };
+      const result = await makeWinCCRequest(endpoint, 'GET', null, headers);
+      return mcpResult(`WinCC Message Block '${messageBlockName}':\n${JSON.stringify(result, null, 2)}`);
+    } catch (error) {
+      return mcpResult(`Error retrieving message block '${messageBlockName}': ${error.message}`);
+    }
+  }
+);
+
+server.tool(
+  "wincc-get-alarm-messages",
+  "Lists messages. GET /alarmLogging/Messages with optional paging (itemLimit, continuationPoint). Use Accept-Language for response language and Content-Language for identifier resolution.",
+  {
+    itemLimit: z.number().optional(),
+    continuationPoint: z.number().optional(),
+    acceptLanguage: z.string().optional().describe("Preferred response language, e.g., en-US, de-DE"),
+    contentLanguage: z.string().optional().describe("Language for identifiers in URL/query, e.g., en-US, de-DE")
+  },
+  async ({ itemLimit, continuationPoint, acceptLanguage, contentLanguage }, executionContext) => {
+    try {
+      let endpoint = "/alarmLogging/Messages";
+      const params = new URLSearchParams();
+      if (itemLimit) params.append("itemLimit", itemLimit.toString());
+      if (continuationPoint) params.append("continuationPoint", continuationPoint.toString());
+      if (params.toString()) endpoint += `?${params.toString()}`;
+      const headers = {
+        ...(acceptLanguage ? { 'Accept-Language': acceptLanguage } : {}),
+        ...(contentLanguage ? { 'Content-Language': contentLanguage } : {})
+      };
+      const result = await makeWinCCRequest(endpoint, 'GET', null, headers);
+      return mcpResult(`WinCC Messages:\n${JSON.stringify(result, null, 2)}`);
+    } catch (error) {
+      return mcpResult(`Error retrieving messages: ${error.message}`);
+    }
+  }
+);
+
+server.tool(
+  "wincc-get-alarm-message",
+  "Reads a message. GET /alarmLogging/Message/{messageNumber}. Use Accept-Language for response language and Content-Language for identifier resolution.",
+  {
+    messageNumber: z.union([z.string(), z.number()]).describe("Message number identifier"),
+    acceptLanguage: z.string().optional().describe("Preferred response language, e.g., en-US, de-DE"),
+    contentLanguage: z.string().optional().describe("Language for identifiers in URL/query, e.g., en-US, de-DE")
+  },
+  async ({ messageNumber, acceptLanguage, contentLanguage }, executionContext) => {
+    try {
+      const endpoint = `/alarmLogging/Message/${encodeURIComponent(String(messageNumber))}`;
+      const headers = {
+        ...(acceptLanguage ? { 'Accept-Language': acceptLanguage } : {}),
+        ...(contentLanguage ? { 'Content-Language': contentLanguage } : {})
+      };
+      const result = await makeWinCCRequest(endpoint, 'GET', null, headers);
+      return mcpResult(`WinCC Message '${messageNumber}':\n${JSON.stringify(result, null, 2)}`);
+    } catch (error) {
+      return mcpResult(`Error retrieving message '${messageNumber}': ${error.message}`);
+    }
+  }
+);
+
+server.tool(
+  "wincc-get-alarm-limit-values",
+  "Lists limit values. GET /alarmLogging/LimitValues with optional paging (itemLimit, continuationPoint). Use Accept-Language for response language and Content-Language for identifier resolution.",
+  {
+    itemLimit: z.number().optional(),
+    continuationPoint: z.number().optional(),
+    acceptLanguage: z.string().optional().describe("Preferred response language, e.g., en-US, de-DE"),
+    contentLanguage: z.string().optional().describe("Language for identifiers in URL/query, e.g., en-US, de-DE")
+  },
+  async ({ itemLimit, continuationPoint, acceptLanguage, contentLanguage }, executionContext) => {
+    try {
+      let endpoint = "/alarmLogging/LimitValues";
+      const params = new URLSearchParams();
+      if (itemLimit) params.append("itemLimit", itemLimit.toString());
+      if (continuationPoint) params.append("continuationPoint", continuationPoint.toString());
+      if (params.toString()) endpoint += `?${params.toString()}`;
+      const headers = {
+        ...(acceptLanguage ? { 'Accept-Language': acceptLanguage } : {}),
+        ...(contentLanguage ? { 'Content-Language': contentLanguage } : {})
+      };
+      const result = await makeWinCCRequest(endpoint, 'GET', null, headers);
+      return mcpResult(`WinCC Limit Values:\n${JSON.stringify(result, null, 2)}`);
+    } catch (error) {
+      return mcpResult(`Error retrieving limit values: ${error.message}`);
+    }
+  }
+);
+
+server.tool(
+  "wincc-get-alarm-limit-value",
+  "Reads limit values for a tag. GET /alarmLogging/LimitValue/{tagName}. Use Accept-Language for response language and Content-Language for identifier resolution.",
+  {
+    tagName: z.string().min(1, "Tag name cannot be empty"),
+    acceptLanguage: z.string().optional().describe("Preferred response language, e.g., en-US, de-DE"),
+    contentLanguage: z.string().optional().describe("Language for identifiers in URL/query, e.g., en-US, de-DE")
+  },
+  async ({ tagName, acceptLanguage, contentLanguage }, executionContext) => {
+    try {
+      const endpoint = `/alarmLogging/LimitValue/${encodeURIComponent(tagName)}`;
+      const headers = {
+        ...(acceptLanguage ? { 'Accept-Language': acceptLanguage } : {}),
+        ...(contentLanguage ? { 'Content-Language': contentLanguage } : {})
+      };
+      const result = await makeWinCCRequest(endpoint, 'GET', null, headers);
+      return mcpResult(`WinCC Limit Value for tag '${tagName}':\n${JSON.stringify(result, null, 2)}`);
+    } catch (error) {
+      return mcpResult(`Error retrieving limit value for tag '${tagName}': ${error.message}`);
+    }
+  }
+);
+
+server.tool(
+  "wincc-get-alarm-message-groups",
+  "Lists message groups. GET /alarmLogging/MessageGroups with optional paging (itemLimit, continuationPoint). Use Accept-Language for response language and Content-Language for identifier resolution.",
+  {
+    itemLimit: z.number().optional(),
+    continuationPoint: z.number().optional(),
+    acceptLanguage: z.string().optional().describe("Preferred response language, e.g., en-US, de-DE"),
+    contentLanguage: z.string().optional().describe("Language for identifiers in URL/query, e.g., en-US, de-DE")
+  },
+  async ({ itemLimit, continuationPoint, acceptLanguage, contentLanguage }, executionContext) => {
+    try {
+      let endpoint = "/alarmLogging/MessageGroups";
+      const params = new URLSearchParams();
+      if (itemLimit) params.append("itemLimit", itemLimit.toString());
+      if (continuationPoint) params.append("continuationPoint", continuationPoint.toString());
+      if (params.toString()) endpoint += `?${params.toString()}`;
+      const headers = {
+        ...(acceptLanguage ? { 'Accept-Language': acceptLanguage } : {}),
+        ...(contentLanguage ? { 'Content-Language': contentLanguage } : {})
+      };
+      const result = await makeWinCCRequest(endpoint, 'GET', null, headers);
+      return mcpResult(`WinCC Message Groups:\n${JSON.stringify(result, null, 2)}`);
+    } catch (error) {
+      return mcpResult(`Error retrieving message groups: ${error.message}`);
+    }
+  }
+);
+
+server.tool(
+  "wincc-get-alarm-message-group",
+  "Reads a message group. GET /alarmLogging/MessageGroup/{messageGroupName}. Use Accept-Language for response language and Content-Language for identifier resolution.",
+  {
+    messageGroupName: z.string().min(1, "Message group name cannot be empty"),
+    acceptLanguage: z.string().optional().describe("Preferred response language, e.g., en-US, de-DE"),
+    contentLanguage: z.string().optional().describe("Language for identifiers in URL/query, e.g., en-US, de-DE")
+  },
+  async ({ messageGroupName, acceptLanguage, contentLanguage }, executionContext) => {
+    try {
+      const endpoint = `/alarmLogging/MessageGroup/${encodeURIComponent(messageGroupName)}`;
+      const headers = {
+        ...(acceptLanguage ? { 'Accept-Language': acceptLanguage } : {}),
+        ...(contentLanguage ? { 'Content-Language': contentLanguage } : {})
+      };
+      const result = await makeWinCCRequest(endpoint, 'GET', null, headers);
+      return mcpResult(`WinCC Message Group '${messageGroupName}':\n${JSON.stringify(result, null, 2)}`);
+    } catch (error) {
+      return mcpResult(`Error retrieving message group '${messageGroupName}': ${error.message}`);
+    }
+  }
+);
+
+
+
+
+// Alarm Logging runtime tools: RestFilters and message lists
+server.tool(
+  "wincc-get-alarm-rest-filters",
+  "Lists configured REST filters. GET /alarmLogging/RestFilters. Use Accept-Language for response language and Content-Language for identifier resolution.",
+  {
+    acceptLanguage: z.string().optional().describe("Preferred response language, e.g., en-US, de-DE"),
+    contentLanguage: z.string().optional().describe("Language for identifiers in URL/query, e.g., en-US, de-DE")
+  },
+  async ({ acceptLanguage, contentLanguage }, executionContext) => {
+    try {
+      const endpoint = "/alarmLogging/RestFilters";
+      const headers = {
+        ...(acceptLanguage ? { 'Accept-Language': acceptLanguage } : {}),
+        ...(contentLanguage ? { 'Content-Language': contentLanguage } : {})
+      };
+      const result = await makeWinCCRequest(endpoint, 'GET', null, headers);
+      return mcpResult(`WinCC REST Filters:\n${JSON.stringify(result, null, 2)}`);
+    } catch (error) {
+      return mcpResult(`Error retrieving REST filters: ${error.message}`);
+    }
+  }
+);
+
+server.tool(
+  "wincc-get-alarm-rest-filter",
+  "Reads a REST filter. GET /alarmLogging/RestFilter/{filterName}. Use Accept-Language for response language and Content-Language for identifier resolution.",
+  {
+    filterName: z.string().min(1, "Filter name cannot be empty"),
+    acceptLanguage: z.string().optional().describe("Preferred response language, e.g., en-US, de-DE"),
+    contentLanguage: z.string().optional().describe("Language for identifiers in URL/query, e.g., en-US, de-DE")
+  },
+  async ({ filterName, acceptLanguage, contentLanguage }, executionContext) => {
+    try {
+      const endpoint = `/alarmLogging/RestFilter/${encodeURIComponent(filterName)}`;
+      const headers = {
+        ...(acceptLanguage ? { 'Accept-Language': acceptLanguage } : {}),
+        ...(contentLanguage ? { 'Content-Language': contentLanguage } : {})
+      };
+      const result = await makeWinCCRequest(endpoint, 'GET', null, headers);
+      return mcpResult(`WinCC REST Filter '${filterName}':\n${JSON.stringify(result, null, 2)}`);
+    } catch (error) {
+      return mcpResult(`Error retrieving REST filter '${filterName}': ${error.message}`);
+    }
+  }
+);
+
+function defineAlarmListTool(name, pathSegment, description, { allowMaxValues = false } = {}) {
+  const toolDescription = allowMaxValues
+    ? `${description} GET /alarmLogging/${pathSegment}/{filterName}. Optional query: maxValues (message system). Use Accept-Language for response language and Content-Language for identifier resolution.`
+    : `${description} GET /alarmLogging/${pathSegment}/{filterName}. Use Accept-Language for response language and Content-Language for identifier resolution.`;
+
+  const schemaShape = allowMaxValues
+    ? {
+        filterName: z.string().min(1, "Filter name cannot be empty"),
+        maxValues: z.number().optional().describe("Maximum number of messages (message system)"),
+        acceptLanguage: z.string().optional().describe("Preferred response language, e.g., en-US, de-DE"),
+        contentLanguage: z.string().optional().describe("Language for identifiers in URL/query, e.g., en-US, de-DE"),
+      }
+    : {
+        filterName: z.string().min(1, "Filter name cannot be empty"),
+        acceptLanguage: z.string().optional().describe("Preferred response language, e.g., en-US, de-DE"),
+        contentLanguage: z.string().optional().describe("Language for identifiers in URL/query, e.g., en-US, de-DE"),
+      };
+
+  server.tool(
+    name,
+    toolDescription,
+    schemaShape,
+    async (args, executionContext) => {
+      const { filterName, acceptLanguage, contentLanguage } = args;
+      try {
+        let endpoint = `/alarmLogging/${pathSegment}/${encodeURIComponent(filterName)}`;
+        if (allowMaxValues && typeof args.maxValues === 'number') {
+          const params = new URLSearchParams();
+          params.append('maxValues', String(args.maxValues));
+          endpoint += `?${params.toString()}`;
+        }
+        const headers = {
+          ...(acceptLanguage ? { 'Accept-Language': acceptLanguage } : {}),
+          ...(contentLanguage ? { 'Content-Language': contentLanguage } : {})
+        };
+        const result = await makeWinCCRequest(endpoint, 'GET', null, headers);
+        return mcpResult(`WinCC ${pathSegment} messages for filter '${filterName}':\n${JSON.stringify(result, null, 2)}`);
+      } catch (error) {
+        return mcpResult(`Error retrieving ${pathSegment} messages for filter '${filterName}': ${error.message}`);
+      }
+    }
+  );
+}
+
+defineAlarmListTool("wincc-get-alarm-message-list", "MessageList", "Read runtime messages of a message list.");
+
+defineAlarmListTool("wincc-get-alarm-short-term-archive", "ShortTermArchive", "Read runtime messages from a short-term archive.", { allowMaxValues: true });
+
+defineAlarmListTool("wincc-get-alarm-long-term-archive", "LongTermArchive", "Read runtime messages from a long-term archive.", { allowMaxValues: true });
+
+defineAlarmListTool("wincc-get-alarm-hit-list", "HitList", "Read runtime messages from a hit list.", { allowMaxValues: true });
+
+defineAlarmListTool("wincc-get-alarm-lock-list", "LockList", "Read runtime messages from a lock list.");
+
+defineAlarmListTool("wincc-get-alarm-hide-list", "Hidelist", "Read runtime messages from a list of messages to be hidden.");
+
+defineAlarmListTool("wincc-get-alarm-hidden-message-list", "HiddenMessageList", "Read runtime messages from a list of hidden messages.");
+
+// ------------------------------------------------------------------------------------------------------------------------------------------------
 // Express server setup for MCP requests
 // ------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -724,24 +1151,38 @@ const app = express();
 
 // CORS middleware to allow cross-origin requests
 app.use((req, res, next) => {
+  if (DEBUG) {
+    console.log(`[CORS] ${req.method} ${req.path} from origin: ${req.headers.origin || '(none)'}`);
+  }
+
   if (WINCC_ALLOW_ORIGIN) {
     res.header('Access-Control-Allow-Origin', WINCC_ALLOW_ORIGIN);
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
-    res.header('Access-Control-Allow-Headers', 'Origin, Content-Type, Accept, Authorization');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, Content-Type, Accept, Authorization, mcp-protocol-version');
+    if (DEBUG) {
+      console.log(`[CORS] Headers set with Allow-Origin: ${WINCC_ALLOW_ORIGIN}`);
+    }
+  } else if (DEBUG) {
+    console.log('[CORS] WARNING: WINCC_ALLOW_ORIGIN not set, CORS headers not added');
   }
-  
+
   // Handle preflight requests
   if (req.method === 'OPTIONS') {
-    res.sendStatus(200);
-  } else {
-    next();
+    if (DEBUG) {
+      console.log('[CORS] Handling OPTIONS preflight request');
+    }
+    return res.status(200).end();
   }
+
+  next();
 });
 
 app.use(express.json());
 
 app.post('/mcp', async (req, res) => {
-  console.log('Received POST MCP request: ' + req.url + ' ' + JSON.stringify(req.body, null, 2));
+  if (DEBUG) {
+    console.log('Received POST MCP request: ' + req.url + ' ' + JSON.stringify(req.body, null, 2));
+  }
   try {
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
@@ -767,7 +1208,9 @@ app.post('/mcp', async (req, res) => {
 });
 
 app.get('/mcp', async (req, res) => {
-  console.log('Received GET MCP request');
+  if (DEBUG) {
+    console.log('Received GET MCP request');
+  }
   res.writeHead(405).end(JSON.stringify({
     jsonrpc: "2.0",
     error: {
@@ -779,7 +1222,9 @@ app.get('/mcp', async (req, res) => {
 });
 
 app.delete('/mcp', async (req, res) => {
-  console.log('Received DELETE MCP request');
+  if (DEBUG) {
+    console.log('Received DELETE MCP request');
+  }
   res.writeHead(405).end(JSON.stringify({
     jsonrpc: "2.0",
     error: {
@@ -802,8 +1247,22 @@ if (parsedPort !== undefined) {
   PORT = n;
 }
 
+// Print effective configuration at startup
+console.log('\n=== WinCC V8 MCP Server Configuration ===');
+console.log(`Port: ${PORT}`);
+console.log(`WinCC URL: ${WINCC_URL}`);
+console.log(`WinCC Username: ${WINCC_USR}`);
+console.log(`WinCC Password: ${WINCC_PWD ? '***' + WINCC_PWD.slice(-3) : '(not set)'}`);
+console.log(`WinCC Bearer Token: ${WINCC_BEARER_TOKEN ? '***' + WINCC_BEARER_TOKEN.slice(-8) : '(not set)'}`);
+console.log(`CORS Allow Origin: ${WINCC_ALLOW_ORIGIN || '(not set - CORS disabled)'}`);
+console.log(`Skip Certificate Validation: ${WINCC_SKIP_CERT_VALIDATION}`);
+console.log(`NODE_TLS_REJECT_UNAUTHORIZED: ${process.env.NODE_TLS_REJECT_UNAUTHORIZED || '(not set)'}`);
+console.log(`Debug Mode: ${DEBUG}`);
+console.log('==========================================\n');
+
 app.listen(PORT, () => {
   console.log(`WinCC V8 MCP Server listening on port ${PORT}`);
+  console.log(`MCP endpoint: http://localhost:${PORT}/mcp`);
 });
 
 function mcpResult(text) {
