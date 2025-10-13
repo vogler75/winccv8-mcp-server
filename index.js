@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 /*
  * Created by Andreas Vogler 2025
  *
@@ -11,22 +12,107 @@ import { z } from "zod";
 import express from 'express';
 import https from 'https';
 
+// ------------------------------
+// Minimal CLI argument parsing
+// ------------------------------
+function parseArgs(argv) {
+  const out = {};
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--help' || a === '-h') {
+      out.help = true;
+      continue;
+    }
+    if (!a.startsWith('--')) continue;
+    const eq = a.indexOf('=');
+    let key, val;
+    if (eq !== -1) {
+      key = a.slice(2, eq);
+      val = a.slice(eq + 1);
+    } else {
+      key = a.slice(2);
+      const next = argv[i + 1];
+      if (next && !next.startsWith('-')) {
+        val = next; i++;
+      } else {
+        val = 'true';
+      }
+    }
+    out[key] = val;
+  }
+  return out;
+}
+
+function parseBoolean(v, defaultVal = false) {
+  if (v === undefined || v === null) return defaultVal;
+  const s = String(v).toLowerCase();
+  if (['1', 'true', 'yes', 'y', 'on'].includes(s)) return true;
+  if (['0', 'false', 'no', 'n', 'off'].includes(s)) return false;
+  return defaultVal;
+}
+
+function printHelp() {
+  const help = `WinCC V8 MCP Server
+
+Usage:
+  node index.js [options]
+  wincc-mcp-server [options]
+
+Options:
+  --port <number>                         MCP server port (default: 3000 or $PORT)
+  --wincc-url <url>                       WinCC V8 REST base URL (default: $WINCC_URL or https://<hostname>:34569/WinCCRestService)
+  --wincc-usr <username>                  Username for basic auth (default: $WINCC_USR or 'username1')
+  --wincc-pwd <password>                  Password for basic auth (default: $WINCC_PWD or 'password1')
+  --wincc-bearer-token <token>            Bearer token (overrides basic auth)
+  --wincc-allow-origin <origin>           CORS allowed origin, e.g. '*' or 'http://host:port'
+  --wincc-skip-certificate-validation     If set (or =true), ignore self-signed certs for https
+  --node-tls-reject-unauthorized <0|1>    Set NODE_TLS_REJECT_UNAUTHORIZED (0 disables TLS verification)
+  -h, --help                              Show this help
+
+Environment variables (still supported):
+  PORT
+  WINCC_URL
+  WINCC_USR
+  WINCC_PWD
+  WINCC_BEARER_TOKEN
+  WINCC_ALLOW_ORIGIN
+  WINCC_SKIP_CERTIFICATE_VALIDATION
+  NODE_TLS_REJECT_UNAUTHORIZED
+`;
+  console.log(help);
+}
+
+const args = parseArgs(process.argv.slice(2));
+if (args.help) {
+  printHelp();
+  process.exit(0);
+}
+
+// Apply NODE_TLS_REJECT_UNAUTHORIZED as early as possible if passed
+if (args['node-tls-reject-unauthorized'] !== undefined) {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = String(args['node-tls-reject-unauthorized']);
+}
+
 // Define the URL of your WinCC REST server
 const os = await import('os');
 const hostname = os.hostname();
-const WINCC_URL = process.env.WINCC_URL || `https://${hostname}:34569/WinCCRestService`;
-const WINCC_USR = process.env.WINCC_USR || "username1";
-const WINCC_PWD = process.env.WINCC_PWD || "password1";
-const WINCC_BEARER_TOKEN = process.env.WINCC_BEARER_TOKEN || null;
-const WINCC_ALLOW_ORIGIN = process.env.WINCC_ALLOW_ORIGIN || null; 
+const WINCC_URL = (args['wincc-url']) || process.env.WINCC_URL || `https://${hostname}:34569/WinCCRestService`;
+const WINCC_USR = (args['wincc-usr']) || process.env.WINCC_USR || "username1";
+const WINCC_PWD = (args['wincc-pwd']) || process.env.WINCC_PWD || "password1";
+const WINCC_BEARER_TOKEN = (args['wincc-bearer-token']) || process.env.WINCC_BEARER_TOKEN || null;
+const WINCC_ALLOW_ORIGIN = (args['wincc-allow-origin']) || process.env.WINCC_ALLOW_ORIGIN || null; 
+const WINCC_SKIP_CERT_VALIDATION = parseBoolean(
+  args['wincc-skip-certificate-validation'] ?? process.env.WINCC_SKIP_CERTIFICATE_VALIDATION,
+  false
+);
 
 // Create an HTTPS agent that ignores self-signed certificate errors
 // WARNING: Use with caution, only for development or trusted internal networks.
-const agentToUse = WINCC_URL.startsWith('https://') && process.env.WINCC_SKIP_CERTIFICATE_VALIDATION === 'true'
+const agentToUse = WINCC_URL.startsWith('https://') && WINCC_SKIP_CERT_VALIDATION
   ? new https.Agent({ rejectUnauthorized: false })
   : undefined;
 
-console.log("WinCC URL: ", WINCC_URL);
+console.log("WinCC URL:", WINCC_URL);
 
 const sessionData = {
   usr: WINCC_USR,
@@ -70,12 +156,11 @@ async function makeWinCCRequest(endpoint, method = 'GET', body = null) {
     }
 
     const data = await response.json();
-    //console.log(`Response from WinCC API: ${JSON.stringify(data, null, 2)}`);
     return data;
   } catch (error) {
     console.error(`WinCC API request failed: ${error.message} ${method} ${url} ${body ? JSON.stringify(body) : ''}`);
 
-	  // Enhanced error logging with more details
+    // Enhanced error logging with more details
     console.error('=== WinCC API Request Failed ===');
     console.error('URL:', url);
     console.error('Method:', method);
@@ -86,24 +171,17 @@ async function makeWinCCRequest(endpoint, method = 'GET', body = null) {
     console.error('Error cause:', error.cause);
     console.error('Error stack:', error.stack);
     
-    // Check for specific error types
     if (error.code) {
       console.error('Error code:', error.code);
-    }        
-    
-    // Certificate/SSL errors
+    }
     if (error.code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' || 
         error.code === 'CERT_HAS_EXPIRED' ||
         error.code === 'DEPTH_ZERO_SELF_SIGNED_CERT') {
       console.error('SSL Certificate issue detected');
     }
-    
-    // Connection errors
     if (error.code === 'ECONNREFUSED' || error.code === 'ECONNRESET') {
       console.error('Connection issue detected');
     }
-    
-    // Timeout errors
     if (error.code === 'ETIMEDOUT' || error.name === 'AbortError') {
       console.error('Timeout issue detected');
     }
@@ -137,13 +215,11 @@ server.tool(
   },
   async ({ username, password }, executionContext) => {
     try {
-      // Store credentials for basic auth
       sessionData.usr = username;
       sessionData.pwd = password;
       sessionData.bearerToken = null; // Clear any existing bearer token
 
-      // Test the connection by trying to get connections
-      const testResult = await makeWinCCRequest("/tagManagement/Connections");
+      await makeWinCCRequest("/tagManagement/Connections");
 
       return mcpResult(`Successfully logged in to WinCC as user '${username}'. Authentication credentials stored for session.`);
     } catch (error) {
@@ -672,7 +748,6 @@ app.post('/mcp', async (req, res) => {
     });
     res.on('close', () => {
       transport.close();
-      // server.close(); // DO NOT close the main server instance on each request
     });
     await server.connect(transport);
     await transport.handleRequest(req, res, req.body);
@@ -716,7 +791,17 @@ app.delete('/mcp', async (req, res) => {
 });
 
 // Start the server
-const PORT = 3000;
+const parsedPort = args.port || process.env.PORT;
+let PORT = 3000;
+if (parsedPort !== undefined) {
+  const n = Number(parsedPort);
+  if (!Number.isInteger(n) || n < 1 || n > 65535) {
+    console.error(`Invalid --port value: '${parsedPort}'. Expected integer 1-65535.`);
+    process.exit(1);
+  }
+  PORT = n;
+}
+
 app.listen(PORT, () => {
   console.log(`WinCC V8 MCP Server listening on port ${PORT}`);
 });

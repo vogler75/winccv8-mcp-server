@@ -94,6 +94,9 @@ NODE_TLS_REJECT_UNAUTHORIZED=0                     # Set to 0 to disable TLS cer
 
 # CORS Configuration
 WINCC_ALLOW_ORIGIN=*                               # CORS origin setting - '*' allows all origins, or specify specific URLs like 'http://localhost:3000'
+
+# MCP Server Port
+PORT=3000                                          # MCP server port (can also be set via --port)
 ```
 
 ### WinCC System Setup
@@ -109,14 +112,55 @@ WINCC_ALLOW_ORIGIN=*                               # CORS origin setting - '*' a
 # Using npm
 npm start
 
-# Using node directly
+# Using node directly (default port 3000)
 node index.js
 
 # Development mode with debugging
 npm run dev
 ```
 
-The server will start on port 3000 by default and listen for MCP requests at the `/mcp` endpoint.
+The server starts on port 3000 by default (or `$PORT` if set) and listens for MCP requests at the `/mcp` endpoint.
+
+### CLI Options
+You can override configuration via command-line flags:
+```bash
+# Set MCP server port
+node index.js --port 4000
+
+# Set WinCC REST base URL
+node index.js --wincc-url https://my-host:34569/WinCCRestService
+
+# Authentication (basic)
+node index.js --wincc-usr myuser --wincc-pwd mypass
+
+# Authentication (bearer token takes precedence over basic)
+node index.js --wincc-bearer-token "eyJhbGciOi..."
+
+# CORS allowed origin
+node index.js --wincc-allow-origin "*"
+node index.js --wincc-allow-origin "http://localhost:5173"
+
+# Skip certificate validation for https (development only)
+node index.js --wincc-skip-certificate-validation
+
+# Control Node's TLS rejection directly (development only)
+node index.js --node-tls-reject-unauthorized 0
+
+# Combine options
+node index.js --port 4000 \
+  --wincc-url https://my-host:34569/WinCCRestService \
+  --wincc-usr myuser --wincc-pwd mypass \
+  --wincc-allow-origin "http://localhost:5173" \
+  --wincc-skip-certificate-validation
+
+# If installed via npm (bin: wincc-mcp-server)
+wincc-mcp-server --port 4000 --wincc-url https://my-host:34569/WinCCRestService
+
+# Show help
+node index.js --help
+```
+
+Precedence: CLI flags override environment variables; otherwise defaults apply.
 
 ## Connecting with a Claude Desktop Client
 
