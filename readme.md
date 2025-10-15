@@ -70,27 +70,27 @@ A Model Context Protocol (MCP) server that provides access to Siemens WinCC V8 S
 - `wincc-get-archive-tags` - Read all archive system tag configurations
 
 ### Alarm Logging
-- `wincc-get-alarm-message-classes` - List message classes (GET /alarmLogging/MessageClasses)
-- `wincc-get-alarm-message-class` - Read specific message class (GET /alarmLogging/MessageClass/{messageClassName})
-- `wincc-get-alarm-message-types` - List message types (GET /alarmLogging/MessageTypes)
-- `wincc-get-alarm-message-type` - Read specific message type (GET /alarmLogging/MessageType/{messageTypeName})
-- `wincc-get-alarm-message-groups` - List message groups (GET /alarmLogging/MessageGroups)
-- `wincc-get-alarm-message-group` - Read specific message group (GET /alarmLogging/MessageGroup/{messageGroupName})
-- `wincc-get-alarm-message-blocks` - List message blocks (GET /alarmLogging/MessageBlocks)
-- `wincc-get-alarm-message-block` - Read specific message block (GET /alarmLogging/MessageBlock/{messageBlockName})
-- `wincc-get-alarm-messages` - List messages (GET /alarmLogging/Messages)
-- `wincc-get-alarm-message` - Read specific message by number (GET /alarmLogging/Message/{messageNumber})
-- `wincc-get-alarm-limit-values` - List limit values (GET /alarmLogging/LimitValues)
-- `wincc-get-alarm-limit-value` - Read per-tag limit values (GET /alarmLogging/LimitValue/{tagName})
-- `wincc-get-alarm-rest-filters` - List REST filters (GET /alarmLogging/RestFilters)
-- `wincc-get-alarm-rest-filter` - Read REST filter (GET /alarmLogging/RestFilter/{filterName})
-- `wincc-get-alarm-message-list` - Read runtime messages of a message list (GET /alarmLogging/MessageList/{filterName})
-- `wincc-get-alarm-short-term-archive` - Read runtime messages from a short-term archive (GET /alarmLogging/ShortTermArchive/{filterName}). Supports `maxValues` to limit returned messages (message system).
-- `wincc-get-alarm-long-term-archive` - Read runtime messages from a long-term archive (GET /alarmLogging/LongTermArchive/{filterName}). Supports `maxValues` to limit returned messages (message system).
-- `wincc-get-alarm-hit-list` - Read runtime messages from a hit list (GET /alarmLogging/HitList/{filterName}). Supports `maxValues` to limit returned messages (message system).
-- `wincc-get-alarm-lock-list` - Read runtime messages from a lock list (GET /alarmLogging/LockList/{filterName})
-- `wincc-get-alarm-hide-list` - Read runtime messages from a list to be hidden (GET /alarmLogging/Hidelist/{filterName})
-- `wincc-get-alarm-hidden-message-list` - Read runtime messages from a list of hidden messages (GET /alarmLogging/HiddenMessageList/{filterName})
+- `wincc-get-alarm-message-classes` - List message classes with optional paging and language support (GET /alarmLogging/MessageClasses)
+- `wincc-get-alarm-message-class` - Read specific message class with language support (GET /alarmLogging/MessageClass/{messageClassName})
+- `wincc-get-alarm-message-types` - List message types with optional paging and language support (GET /alarmLogging/MessageTypes)  
+- `wincc-get-alarm-message-type` - Read specific message type with language support (GET /alarmLogging/MessageType/{messageTypeName})
+- `wincc-get-alarm-message-groups` - List message groups with optional paging and language support (GET /alarmLogging/MessageGroups)
+- `wincc-get-alarm-message-group` - Read specific message group with language support (GET /alarmLogging/MessageGroup/{messageGroupName})
+- `wincc-get-alarm-message-blocks` - List message blocks with optional paging and language support (GET /alarmLogging/MessageBlocks)
+- `wincc-get-alarm-message-block` - Read specific message block with language support (GET /alarmLogging/MessageBlock/{messageBlockName})
+- `wincc-get-alarm-messages` - List messages with optional paging and language support (GET /alarmLogging/Messages)
+- `wincc-get-alarm-message` - Read specific message by number with language support (GET /alarmLogging/Message/{messageNumber})
+- `wincc-get-alarm-limit-values` - List limit values with optional paging and language support (GET /alarmLogging/LimitValues)
+- `wincc-get-alarm-limit-value` - Read per-tag limit values with language support (GET /alarmLogging/LimitValue/{tagName})
+- `wincc-get-alarm-rest-filters` - List configured REST filters with language support (GET /alarmLogging/RestFilters)
+- `wincc-get-alarm-rest-filter` - Read specific REST filter with language support (GET /alarmLogging/RestFilter/{filterName})
+- `wincc-get-alarm-message-list` - Read runtime messages of a message list with language support (GET /alarmLogging/MessageList/{filterName})
+- `wincc-get-alarm-short-term-archive` - Read runtime messages from a short-term archive with optional maxValues limit and language support (GET /alarmLogging/ShortTermArchive/{filterName})
+- `wincc-get-alarm-long-term-archive` - Read runtime messages from a long-term archive with optional maxValues limit and language support (GET /alarmLogging/LongTermArchive/{filterName})
+- `wincc-get-alarm-hit-list` - Read runtime messages from a hit list with optional maxValues limit and language support (GET /alarmLogging/HitList/{filterName})
+- `wincc-get-alarm-lock-list` - Read runtime messages from a lock list with language support (GET /alarmLogging/LockList/{filterName})
+- `wincc-get-alarm-hide-list` - Read runtime messages from a list to be hidden with language support (GET /alarmLogging/Hidelist/{filterName})
+- `wincc-get-alarm-hidden-message-list` - Read runtime messages from a list of hidden messages with language support (GET /alarmLogging/HiddenMessageList/{filterName})
 
 ## Installation
 
